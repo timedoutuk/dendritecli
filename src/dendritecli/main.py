@@ -206,7 +206,7 @@ def purge_room(http: api.HTTPAPIManager, skip_checks: bool, have_evacuated: bool
     if not have_evacuated:
         if not Confirm.ask("Have you already evacuated the room (dendrite-cli evacuate room)?"):
             if Confirm.ask("Would you like to?"):
-                if not room(room_id):
+                if not room([room_id]):
                     return
             else:
                 console.print("[yellow]Aborting.")
