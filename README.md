@@ -64,6 +64,7 @@ database_uri = "<the URI of your database>"
 # e.g: sqlite:///dendritecli.db
 # e.g: postgres://username:password@hostname:port/database?option=value
 # Both SQLite and PostgreSQL are supported.
+software = "dendrite"  # or: "zendrite". Defaults to "dendrite".
 
 override-password-length-check = false
 # Due to a bug in Dendrite (https://github.com/matrix-org/dendrite/issues/3012), passwords cannot be over 72 bytes

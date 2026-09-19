@@ -64,6 +64,9 @@ class HTTPAPIManager:
         if config.get("headers"):
             kwargs.setdefault("headers", config["headers"])
         self.base_url = kwargs.get("server", config.get("server")) or "http://localhost:8008"
+        self.software = str(config.get("software", "dendrite")).lower()
+        if self.software not in ("dendrite", "zendrite"):
+            raise ValueError(f"Unsupported software {self.software!r} - expected \"dendrite\" or \"zendrite\"")
         self.client = client or httpx.Client(
             auth=BearerAuth(access_token),
             headers={
@@ -149,6 +152,13 @@ class HTTPAPIManager:
         with open(CONFIG_FILE, "w") as f:
             toml.dump(config, f)
 
+    @property
+    def site_prefix(self) -> str:
+        return "_" + self.software
+
+    def _build_url(self, *parts: str) -> str:
+        return "/".join((self.site_prefix, *parts))
+
     def evacuate_room(self, room_id: str) -> dict[str, list[str]]:
         """
         Instruct Dendrite to part all local users from the given ``roomID`` in the URL.
@@ -166,7 +176,7 @@ class HTTPAPIManager:
         """
         log.info("Evacuating room %s", room_id)
         room_id = quote(room_id)
-        response = self.client.post(f"/_dendrite/admin/evacuateRoom/{room_id}", timeout=None)
+        response = self.client.post(self._build_url("admin", "evacuateRoom", room_id), timeout=None)
         log.info("Finished evacuating room %s", room_id)
         response.raise_for_status()
         return response.json()
@@ -184,7 +194,7 @@ class HTTPAPIManager:
         """
         log.info("Evacuating user %s", user_id)
         user_id = quote(user_id)
-        response = self.client.post(f"/_dendrite/admin/evacuateUser/{user_id}", timeout=None)
+        response = self.client.post(self._build_url("admin", "evacuateUser", user_id), timeout=None)
         log.info("Finished evacuating user %s", user_id)
         response.raise_for_status()
         return response.json()
@@ -213,7 +223,7 @@ class HTTPAPIManager:
 
         log.info("Resetting password for user %s", user_id)
         response = self.client.post(
-            f"/_dendrite/admin/resetPassword/{user_id}",
+            self._build_url("admin", "resetPassword", user_id),
             json={
                 "password": new_password,
                 "logout_devices": logout_devices,
@@ -223,7 +233,7 @@ class HTTPAPIManager:
         response.raise_for_status()
         return response.json()
 
-    def reindex_events(self) -> dict:
+    def reindex_events(self) -> dict | None:
         """
         Instructs Dendrite to reindex all searchable events (``m.room.message``, ``m.room.topic`` and ``m.room.name``).
         An empty JSON body will be returned immediately.
@@ -237,7 +247,7 @@ class HTTPAPIManager:
         :raises: httpx.HTTPError - if the request failed.
         """
         log.info("Requesting dendrite to reindex events")
-        response = self.client.post("/_dendrite/admin/fulltext/reindex")
+        response = self.client.post(self._build_url("admin", "fulltext", "reindex"))
         response.raise_for_status()
         return response.json() or None
 
@@ -255,7 +265,7 @@ class HTTPAPIManager:
         """
         log.info("Requesting dendrite to refresh devices for user %s", user_id)
         user_id = quote(user_id)
-        response = self.client.post(f"/_dendrite/admin/refreshDevices/{user_id}")
+        response = self.client.post(self._build_url("admin", "refreshDevices", user_id))
         response.raise_for_status()
         return response.json()
 
@@ -272,10 +282,10 @@ class HTTPAPIManager:
         """
         log.info("Requesting dendrite to purge room %s", room_id)
         room_id = quote(room_id)
-        response = self.client.post(f"/_dendrite/admin/purgeRoom/{room_id}", timeout=None)
+        response = self.client.post(self._build_url("admin", "purgeRoom", room_id), timeout=None)
         log.info("Finished purging room %s", room_id)
         response.raise_for_status()
-        return response.json()
+        return response.json() or None
 
     def send_server_notice(self, user_id: str, message: dict) -> dict:
         """
@@ -290,7 +300,7 @@ class HTTPAPIManager:
         """
         log.info("Requesting dendrite to send a server notice to %s", user_id)
         response = self.client.post(
-            "/_synapse/admin/v1/send_server_notice", json={"user_id": user_id, "content": message}
+            self._build_url("admin", "send_server_notice"), json={"user_id": user_id, "content": message}
         )
         log.info("Finished sending server notice to %s", user_id)
         response.raise_for_status()
@@ -386,18 +396,7 @@ class HTTPAPIManager:
         :raises: httpx.HTTPError - if the request failed.
         """
         log.info("Fetching the profile for user %s", user_id)
-        domain = user_id.split(":", 1)[1]
-        user_id = quote(user_id)
-        url = f"/_matrix/client/v3/profile/{user_id}"
-        if domain != self.client.base_url.host:
-            log.warning(
-                "User %s is not local to this server - will contact %r instead.",
-                user_id,
-                domain,
-            )
-            url = f"{self.resolve_delegation(domain)}{url}"
-
-        response = self.client.get(url)
+        response = self.client.get(f"/_matrix/client/v3/profile/{user_id}")
         log.info("Done fetching information about user %s", user_id)
         response.raise_for_status()
         return response.json()
@@ -415,18 +414,7 @@ class HTTPAPIManager:
         :raises: httpx.HTTPError - if the request failed.
         """
         log.info("Fetching information about user %s", user_id)
-        domain = user_id.split(":", 1)[1]
-        user_id = quote(user_id)
-        url = f"/_matrix/client/v3/admin/whois/{user_id}"
-        if domain != self.client.base_url.host:
-            log.warning(
-                "User %s is not local to this server - will contact %r instead.",
-                user_id,
-                domain,
-            )
-            url = f"{self.resolve_delegation(domain)}{url}"
-
-        response = self.client.get(url)
+        response = self.client.get(f"/_matrix/client/v3/admin/whois/{user_id}")
         log.info("Done fetching information about user %s", user_id)
         response.raise_for_status()
         return response.json()
@@ -452,7 +440,7 @@ class HTTPAPIManager:
         random_password = secrets.token_hex(32)
         log.debug("Selected random password %r for temporary reset.", random_password)
         response = self.reset_password(user_id, new_password=random_password)
-        if response.get("password_updated") is not True:
+        if not response.get("password_updated"):
             raise RuntimeError("Failed to reset password.")
 
         log.info("Deactivating user (step 2): Getting access token for user %s", user_id)
@@ -501,8 +489,7 @@ class HTTPAPIManager:
                 "session": info["session"],
                 "type": "m.login.password",
                 "user": user_id,
-            },
-            "erase": True,
+            }
         }
         log.info("Deactivating user (step 3): Deactivating user %s", user_id)
         response = self.client.post(
@@ -523,3 +510,13 @@ class HTTPAPIManager:
         with SQLHandler(uri) as sql:
             users = list(sql.list_accounts())
         return users
+
+    def empty_rooms(self) -> list[str]:
+        """
+        Lists all empty rooms on this server.
+
+        Only works on Zendrite, returning an empty list on Dendrite.
+        """
+        if self.software != "zendrite":
+            return []
+        return self.client.get(self._build_url("admin", "emptyRooms")).raise_for_status().json()
