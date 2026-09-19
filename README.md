@@ -1,6 +1,6 @@
 # Dendritecli
 
-[![Python package](https://github.com/nexy7574/dendritecli/actions/workflows/python-package.yml/badge.svg)](https://github.com/nexy7574/dendritecli/actions/workflows/python-package.yml)
+[![Python package](https://github.com/timedoutuk/dendritecli/actions/workflows/python-package.yml/badge.svg)](https://github.com/timedoutuk/dendritecli/actions/workflows/python-package.yml)
 [![PyPI version](https://badge.fury.io/py/dendritecli.svg)](https://badge.fury.io/py/dendritecli)
 [![PyPI - Downloads](https://img.shields.io/pypi/dm/dendritecli)](https://pypi.org/project/dendritecli/)
 
@@ -31,11 +31,11 @@ You will need python 3.10 or later. You will also need `pipx` (`pip install pipx
 You can then install dendritecli with the following command:
 
 ```shell
-#pipx install git+https://github.com/nexy7574/dendritecli.git
-# We're on PyPi now:
 pipx install dendritecli
-# Or, if you want to be able to use it as a library:
-pip install dendritecli
+# Or, from git:
+#pipx install git+https://github.com/timedoutuk/dendritecli.git
+# Or, as a library:
+#pip install dendritecli
 ```
 
 ## Usage
