@@ -300,7 +300,7 @@ class HTTPAPIManager:
         """
         log.info("Requesting dendrite to send a server notice to %s", user_id)
         response = self.client.post(
-            self._build_url("admin", "send_server_notice"), json={"user_id": user_id, "content": message}
+            "/_synapse/admin/v1/send_server_notice", json={"user_id": user_id, "content": message}
         )
         log.info("Finished sending server notice to %s", user_id)
         response.raise_for_status()
